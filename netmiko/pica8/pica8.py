@@ -25,7 +25,7 @@ class pica8Base(BaseConnection):
         self.enter_cli_mode()
         self.set_base_prompt()
         self.disable_paging(command="set cli screen-length 0")
-        self.set_terminal_width(command='set cli screen-width 511')
+        #self.set_terminal_width(command='set cli screen-width 511')
         # Clear the read buffer
         time.sleep(.8 * self.global_delay_factor)
         self.clear_buffer()
@@ -70,18 +70,18 @@ class pica8Base(BaseConnection):
 
     def check_config_mode(self, check_string='#'):
         """Checks if the device is in configuration mode or not."""
-        return super(pica8Base, self).check_config_mode(check_string=check_string)
+        return super().check_config_mode(check_string=check_string)
 
     def config_mode(self, config_command='configure'):
         """Enter configuration mode."""
-        return super(pica8Base, self).config_mode(config_command=config_command)
+        return super().config_mode(config_command=config_command)
 
     def exit_config_mode(self, exit_config='exit configuration-mode'):
         """Exit configuration mode."""
         output = ""
         if self.check_config_mode():
             output = self.send_command_timing(exit_config, strip_prompt=False, strip_command=False)
-            if 'There are uncommitted changes?' in output:
+            if 'There are uncommitted changes' in output:
                 output += self.send_command_timing('exit discard', strip_prompt=False,
                                                    strip_command=False)
             if self.check_config_mode():
@@ -122,7 +122,7 @@ class pica8Base(BaseConnection):
 
         # Select proper command string based on arguments provided
         command_string = 'commit'
-        commit_marker = 'commit complete'
+        commit_marker = 'Commit OK'
         if check:
             command_string = 'commit check'
             commit_marker = 'configuration check succeeds'
