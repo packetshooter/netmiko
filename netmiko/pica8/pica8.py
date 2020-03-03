@@ -122,26 +122,17 @@ class pica8Base(BaseConnection):
 
         # Select proper command string based on arguments provided
         command_string = 'commit'
-        commit_marker = 'Commit OK'
+        commit_marker = 'Commit OK.'
         if check:
             command_string = 'commit check'
-            commit_marker = 'configuration check succeeds'
+            commit_marker = 'Commit check OK.'
         elif confirm:
             if confirm_delay:
                 command_string = 'commit confirmed ' + str(confirm_delay)
             else:
                 command_string = 'commit confirmed'
-            commit_marker = 'commit confirmed will be automatically rolled back in'
+            commit_marker = 'Will be automatically rolled back in'
 
-        # wrap the comment in quotes
-        if comment:
-            if '"' in comment:
-                raise ValueError("Invalid comment contains double quote")
-            comment = '"{0}"'.format(comment)
-            command_string += ' comment ' + comment
-
-        if and_quit:
-            command_string += ' and-quit'
 
         # Enter config mode (if necessary)
         output = self.config_mode()
@@ -156,8 +147,7 @@ class pica8Base(BaseConnection):
                                                strip_command=False, delay_factor=delay_factor)
 
         if commit_marker not in output:
-            raise ValueError("Commit failed with the following errors:\n\n{0}"
-                             .format(output))
+            raise ValueError(f"Commit failed with the following errors:\n\n{output}")
 
         return output
 
