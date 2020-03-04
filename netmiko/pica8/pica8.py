@@ -151,6 +151,246 @@ class pica8Base(BaseConnection):
 
         return output
 
+    def send_command(
+        self,
+        command_string,
+        expect_string=None,
+        delay_factor=1,
+        max_loops=500,
+        auto_find_prompt=True,
+        strip_prompt=True,
+        strip_command=True,
+        normalize=True,
+        use_textfsm=False,
+        textfsm_template=None,
+        use_genie=False,
+        cmd_verify=False,
+    ):
+        """Execute command_string on the SSH channel using a pattern-based mechanism. Generally
+        used for show commands. By default this method will keep waiting to receive data until the
+        network device prompt is detected. The current network device prompt will be determined
+        automatically.
+        :param command_string: The command to be executed on the remote device.
+        :type command_string: str
+        :param expect_string: Regular expression pattern to use for determining end of output.
+            If left blank will default to being based on router prompt.
+        :type expect_string: str
+        :param delay_factor: Multiplying factor used to adjust delays (default: 1).
+        :type delay_factor: int
+        :param max_loops: Controls wait time in conjunction with delay_factor. Will default to be
+            based upon self.timeout.
+        :type max_loops: int
+        :param strip_prompt: Remove the trailing router prompt from the output (default: True).
+        :type strip_prompt: bool
+        :param strip_command: Remove the echo of the command from the output (default: True).
+        :type strip_command: bool
+        :param normalize: Ensure the proper enter is sent at end of command (default: True).
+        :type normalize: bool
+        :param use_textfsm: Process command output through TextFSM template (default: False).
+        :type normalize: bool
+        :param textfsm_template: Name of template to parse output with; can be fully qualified
+            path, relative path, or name of file in current directory. (default: None).
+        :param use_genie: Process command output through PyATS/Genie parser (default: False).
+        :type normalize: bool
+        :param cmd_verify: Verify command echo before proceeding (default: False).
+        :type cmd_verify: bool
+        """
+        # Time to delay in each read loop
+        loop_delay = 0.2
+
+        # Default to making loop time be roughly equivalent to self.timeout (support old max_loops
+        # and delay_factor arguments for backwards compatibility).
+        delay_factor = self.select_delay_factor(delay_factor)
+        if delay_factor == 1 and max_loops == 500:
+            # Default arguments are being used; use self.timeout instead
+            max_loops = int(self.timeout / loop_delay)
+
+        # Find the current router prompt
+        if expect_string is None:
+            if auto_find_prompt:
+                try:
+                    prompt = self.find_prompt(delay_factor=delay_factor)
+                except ValueError:
+                    prompt = self.base_prompt
+            else:
+                prompt = self.base_prompt
+            search_pattern = re.escape(prompt.strip())
+        else:
+            search_pattern = expect_string
+
+        if normalize:
+            command_string = self.normalize_cmd(command_string)
+
+        time.sleep(delay_factor * loop_delay)
+        self.clear_buffer()
+        self.write_channel(command_string)
+        new_data = ""
+
+        cmd = command_string.strip()
+        # if cmd is just an "enter" skip this section
+        if cmd and cmd_verify:
+            # Make sure you read until you detect the command echo (avoid getting out of sync)
+            new_data = self.read_until_pattern(pattern=re.escape(cmd))
+            new_data = self.normalize_linefeeds(new_data)
+            # Strip off everything before the command echo (to avoid false positives on the prompt)
+            if new_data.count(cmd) == 1:
+                new_data = new_data.split(cmd)[1:]
+                new_data = self.RESPONSE_RETURN.join(new_data)
+                new_data = new_data.lstrip()
+                new_data = f"{cmd}{self.RESPONSE_RETURN}{new_data}"
+
+        i = 1
+        output = ""
+        past_three_reads = deque(maxlen=3)
+        first_line_processed = False
+
+        # Keep reading data until search_pattern is found or until max_loops is reached.
+        while i <= max_loops:
+            if new_data:
+                output += new_data
+                past_three_reads.append(new_data)
+
+                # Case where we haven't processed the first_line yet (there is a potential issue
+                # in the first line (in cases where the line is repainted).
+                if not first_line_processed:
+                    output, first_line_processed = self._first_line_handler(
+                        output, search_pattern
+                    )
+                    # Check if we have already found our pattern
+                    if re.search(search_pattern, output):
+                        break
+
+                else:
+                    # Check if pattern is in the past three reads
+                    if re.search(search_pattern, "".join(past_three_reads)):
+                        break
+
+            time.sleep(delay_factor * loop_delay)
+            i += 1
+            new_data = self.read_channel()
+        else:  # nobreak
+            raise IOError(
+                "Search pattern never detected in send_command_expect: {}".format(
+                    search_pattern
+                )
+            )
+
+        output = self._sanitize_output(
+            output,
+            strip_command=strip_command,
+            command_string=command_string,
+            strip_prompt=strip_prompt,
+        )
+
+        # If both TextFSM and Genie are set, try TextFSM then Genie
+        if use_textfsm:
+            structured_output = get_structured_data(
+                output,
+                platform=self.device_type,
+                command=command_string.strip(),
+                template=textfsm_template,
+            )
+            # If we have structured data; return it.
+            if not isinstance(structured_output, str):
+                return structured_output
+        if use_genie:
+            structured_output = get_structured_data_genie(
+                output, platform=self.device_type, command=command_string.strip()
+            )
+            # If we have structured data; return it.
+            if not isinstance(structured_output, str):
+                return structured_output
+        return output
+
+    def send_config_set(
+        self,
+        config_commands=None,
+        exit_config_mode=True,
+        delay_factor=1,
+        max_loops=150,
+        strip_prompt=False,
+        strip_command=False,
+        config_mode_command=None,
+        cmd_verify=False,
+        enter_config_mode=True,
+    ):
+        """
+        Send configuration commands down the SSH channel.
+        config_commands is an iterable containing all of the configuration commands.
+        The commands will be executed one after the other.
+        Automatically exits/enters configuration mode.
+        :param config_commands: Multiple configuration commands to be sent to the device
+        :type config_commands: list or string
+        :param exit_config_mode: Determines whether or not to exit config mode after complete
+        :type exit_config_mode: bool
+        :param delay_factor: Factor to adjust delays
+        :type delay_factor: int
+        :param max_loops: Controls wait time in conjunction with delay_factor (default: 150)
+        :type max_loops: int
+        :param strip_prompt: Determines whether or not to strip the prompt
+        :type strip_prompt: bool
+        :param strip_command: Determines whether or not to strip the command
+        :type strip_command: bool
+        :param config_mode_command: The command to enter into config mode
+        :type config_mode_command: str
+        :param cmd_verify: Whether or not to verify command echo for each command in config_set
+        :type cmd_verify: bool
+        :param enter_config_mode: Do you enter config mode before sending config commands
+        :type exit_config_mode: bool
+        """
+        delay_factor = self.select_delay_factor(delay_factor)
+        if config_commands is None:
+            return ""
+        elif isinstance(config_commands, str):
+            config_commands = (config_commands,)
+
+        if not hasattr(config_commands, "__iter__"):
+            raise ValueError("Invalid argument passed into send_config_set")
+
+        # Send config commands
+        output = ""
+        if enter_config_mode:
+            cfg_mode_args = (config_mode_command,) if config_mode_command else tuple()
+            output += self.config_mode(*cfg_mode_args)
+
+        if self.fast_cli:
+            for cmd in config_commands:
+                self.write_channel(self.normalize_cmd(cmd))
+            # Gather output
+            output += self._read_channel_timing(
+                delay_factor=delay_factor, max_loops=max_loops
+            )
+        elif not cmd_verify:
+            for cmd in config_commands:
+                self.write_channel(self.normalize_cmd(cmd))
+                time.sleep(delay_factor * 0.05)
+            # Gather output
+            output += self._read_channel_timing(
+                delay_factor=delay_factor, max_loops=max_loops
+            )
+        else:
+            for cmd in config_commands:
+                self.write_channel(self.normalize_cmd(cmd))
+
+                # Make sure command is echoed
+                new_output = self.read_until_pattern(pattern=re.escape(cmd.strip()))
+                output += new_output
+
+                # We might capture next prompt in the original read
+                pattern = f"(?:{re.escape(self.base_prompt)}|#)"
+                if not re.search(pattern, new_output):
+                    # Make sure trailing prompt comes back (after command)
+                    # NX-OS has fast-buffering problem where it immediately echoes command
+                    # Even though the device hasn't caught up with processing command.
+                    new_output = self.read_until_pattern(pattern=pattern)
+                    output += new_output
+
+        if exit_config_mode:
+            output += self.exit_config_mode()
+        output = self._sanitize_output(output)
+        log.debug(f"{output}")
+        return output
+
     def strip_prompt(self, *args, **kwargs):
         """Strip the trailing router prompt from the output."""
         a_string = super(pica8Base, self).strip_prompt(*args, **kwargs)
