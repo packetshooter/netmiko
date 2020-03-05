@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import re
 import time
+from collections import deque
 
 from netmiko.base_connection import BaseConnection
 from netmiko.scp_handler import BaseFileTransfer
