@@ -4,6 +4,7 @@ import re
 import time
 from collections import deque
 
+from netmiko import log
 from netmiko.base_connection import BaseConnection
 from netmiko.scp_handler import BaseFileTransfer
 
@@ -151,6 +152,42 @@ class pica8Base(BaseConnection):
             raise ValueError(f"Commit failed with the following errors:\n\n{output}")
 
         return output
+
+   def strip_command(self, command_string, output):
+        """
+        Strip command_string from output string
+
+        Cisco IOS adds backspaces into output for long commands (i.e. for commands that line wrap)
+
+        :param command_string: The command string sent to the device
+        :type command_string: str
+
+        :param output: The returned output as a result of the command string sent to the device
+        :type output: str
+        """
+        backspace_char = "\x08"
+
+        # Check for line wrap (remove backspaces)
+        if backspace_char in output:
+            output = output.replace(backspace_char, "")
+
+        # Juniper has a weird case where the echoed command will be " \n"
+        # i.e. there is an extra space there.
+        # Pica8 has a wierd case where the echoed command starts with a "\n" followed by the command on the second line
+        # i.e. a newline character is at the start
+        cmd = command_string.strip()
+        if output.startswith(cmd):
+            output_lines = output.split(self.RESPONSE_RETURN)
+            new_output = output_lines[1:]
+            return self.RESPONSE_RETURN.join(new_output)
+        elif output.startswith('\n')
+            output_lines = output.split('\n')
+            new_output = output_lines[1:]
+            return self.RESPONSE_RETURN.join(new_output)
+            
+        else:
+            # command_string isn't there; do nothing
+            return output
 
     def send_command(
         self,
