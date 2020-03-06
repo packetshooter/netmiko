@@ -153,7 +153,7 @@ class pica8Base(BaseConnection):
 
         return output
 
-   def strip_command(self, command_string, output):
+    def strip_command(self, command_string, output):
         """
         Strip command_string from output string
 
