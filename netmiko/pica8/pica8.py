@@ -182,7 +182,7 @@ class pica8Base(BaseConnection):
             return self.RESPONSE_RETURN.join(new_output)
         elif output.startswith('\n'):
             output_lines = output.split('\n')
-            new_output = output_lines[1:]
+            new_output = output_lines[2:]
             return self.RESPONSE_RETURN.join(new_output)
             
         else:
