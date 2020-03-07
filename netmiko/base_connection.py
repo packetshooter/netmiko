@@ -75,6 +75,7 @@ class BaseConnection(object):
         session_log_file_mode="write",
         allow_auto_change=False,
         encoding="ascii",
+        sock=None,
     ):
         """
         Initialize attributes for establishing connection to target device.
