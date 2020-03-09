@@ -127,7 +127,7 @@ class pica8Base(BaseConnection):
         commit_marker = 'Commit OK.'
         if check:
             command_string = 'commit check'
-            commit_marker = 'Commit check OK.'
+            commit_marker = 'Commit check OK'
         elif confirm:
             if confirm_delay:
                 command_string = 'commit confirmed ' + str(confirm_delay)
@@ -148,7 +148,8 @@ class pica8Base(BaseConnection):
             output += self.send_command_expect(command_string, strip_prompt=False,
                                                strip_command=False, delay_factor=delay_factor)
 
-        if commit_marker not in output:
+        if commit_marker not in output.split('\n')[2]:
+            print(output.split('\n')[2])
             raise ValueError(f"Commit failed with the following errors:\n\n{output}")
 
         return output
@@ -343,13 +344,13 @@ class pica8Base(BaseConnection):
     def send_config_set(
         self,
         config_commands=None,
-        exit_config_mode=True,
+        exit_config_mode=False,
         delay_factor=1,
         max_loops=150,
         strip_prompt=False,
         strip_command=False,
         config_mode_command=None,
-        cmd_verify=False,
+        cmd_verify=True,
         enter_config_mode=True,
     ):
         """
@@ -357,22 +358,31 @@ class pica8Base(BaseConnection):
         config_commands is an iterable containing all of the configuration commands.
         The commands will be executed one after the other.
         Automatically exits/enters configuration mode.
+
         :param config_commands: Multiple configuration commands to be sent to the device
         :type config_commands: list or string
+
         :param exit_config_mode: Determines whether or not to exit config mode after complete
         :type exit_config_mode: bool
+
         :param delay_factor: Factor to adjust delays
         :type delay_factor: int
+
         :param max_loops: Controls wait time in conjunction with delay_factor (default: 150)
         :type max_loops: int
+
         :param strip_prompt: Determines whether or not to strip the prompt
         :type strip_prompt: bool
+
         :param strip_command: Determines whether or not to strip the command
         :type strip_command: bool
+
         :param config_mode_command: The command to enter into config mode
         :type config_mode_command: str
+
         :param cmd_verify: Whether or not to verify command echo for each command in config_set
         :type cmd_verify: bool
+
         :param enter_config_mode: Do you enter config mode before sending config commands
         :type exit_config_mode: bool
         """
