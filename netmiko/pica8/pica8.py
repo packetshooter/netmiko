@@ -147,19 +147,15 @@ class pica8Base(BaseConnection):
         else:
             output += self.send_command_expect(command_string, strip_prompt=False,
                                                strip_command=False, delay_factor=delay_factor)
-        # print('*********')
-        # print(commit_marker)
-        # print('*********')
-        # print(output)
-        # print('*********')
+
+        # Commit checking is odd due to Pica8 having new line and prompt echo'ed back before commit ok statement
         commit_check_pica8 = False
         for x in output.split('\n'):
             if commit_marker in x:
                 commit_check_pica8 = True
         if commit_check_pica8 != True:
                 raise ValueError(f"Commit failed with the following errors:\n\n{output}")
-        # if commit_marker not in output:
-        #     raise ValueError(f"Commit failed with the following errors:\n\n{output}")
+
 
         return output
 
