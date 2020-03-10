@@ -152,11 +152,13 @@ class pica8Base(BaseConnection):
         # print('*********')
         # print(output)
         # print('*********')
-        # if commit_marker not in output.split('\n')[2]:
-        #     print(output.split('\n')[2])
+        for x in output.split('\n'):
+            if commit_marker in x:
+                commit_check_pica8 = True
+        if commit_check_pica8 != True:
+                raise ValueError(f"Commit failed with the following errors:\n\n{output}")
+        # if commit_marker not in output:
         #     raise ValueError(f"Commit failed with the following errors:\n\n{output}")
-        if commit_marker not in output:
-            raise ValueError(f"Commit failed with the following errors:\n\n{output}")
 
         return output
 
