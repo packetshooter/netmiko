@@ -147,7 +147,11 @@ class pica8Base(BaseConnection):
         else:
             output += self.send_command_expect(command_string, strip_prompt=False,
                                                strip_command=False, delay_factor=delay_factor)
-
+        print(*********)
+        print(commit_marker)
+        print(*********)
+        print(output)
+        print(*********)
         if commit_marker not in output.split('\n')[2]:
             print(output.split('\n')[2])
             raise ValueError(f"Commit failed with the following errors:\n\n{output}")
