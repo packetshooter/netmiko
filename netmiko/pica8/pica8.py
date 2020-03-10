@@ -152,6 +152,7 @@ class pica8Base(BaseConnection):
         # print('*********')
         # print(output)
         # print('*********')
+        commit_check_pica8 = False
         for x in output.split('\n'):
             if commit_marker in x:
                 commit_check_pica8 = True
